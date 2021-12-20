@@ -1,0 +1,72 @@
+{
+    "Comment": "Basic step function to trigger Glue job and monitor it ",
+    "StartAt": "Glue - Start Job",
+    "States": {
+      "Glue - Start Job": {
+        "Type": "Task",
+        "Resource": "arn:aws:states:::glue:startJobRun",
+        "Parameters": {
+          "JobName": "GlueJobName"
+        },
+        "Next": "Glue - Check Job Status"
+      },
+      "Glue - Check Job Status": {
+        "Type": "Task",
+        "Parameters": {
+          "JobName.$": "$.JobName",
+          "RunId.$": "$.JobRunId"
+        },
+        "Resource": "arn:aws:states:::aws-sdk:glue:getJobRun",
+        "Next": "Glue Job Status Action"
+      },
+      "Glue Job Status Action": {
+        "Type": "Choice",
+        "Choices": [
+          {
+            "Or": [
+              {
+                "Variable": "$.JobRun.JobRunState",
+                "StringEquals": "RUNNING"
+              },
+              {
+                "Variable": "$.JobRun.JobRunState",
+                "StringEquals": "STARTING"
+              },
+              {
+                "Variable": "$.JobRun.JobRunState",
+                "StringEquals": "STOPPING"
+              }
+            ],
+            "Next": "Wait for 10 sec",
+            "Comment": "wait for 10 seconds"
+          },
+          {
+            "Variable": "$.JobRun.JobRunState",
+            "StringEquals": "SUCCEEDED",
+            "Next": "Success"
+          }
+        ],
+        "Default": "Fail"
+      },
+      "Wait for 10 sec": {
+        "Type": "Wait",
+        "Seconds": 10,
+        "Next": "Check again",
+        "Comment": "if job is not complete keep checking the status"
+      },
+      "Check again": {
+        "Type": "Pass",
+        "Next": "Glue - Check Job Status",
+        "Parameters": {
+          "JobName.$": "$.JobRun.JobName",
+          "JobRunId.$": "$.JobRun.Id"
+        }
+      },
+      "Fail": {
+        "Type": "Fail"
+      },
+      "Success": {
+        "Type": "Succeed"
+      }
+    }
+  }
